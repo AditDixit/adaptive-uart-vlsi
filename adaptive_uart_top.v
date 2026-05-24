@@ -1,0 +1,119 @@
+// ============================================================
+// Project  : Power-Aware Adaptive UART Transceiver
+// Module   : adaptive_uart_top
+// Author   : [Your Name] | VIT Vellore | ECE 7th Sem
+// Date     : May 2026
+// ============================================================
+
+module adaptive_uart_top #(
+    parameter CLK_FREQ = 50_000_000
+)(
+    input  wire        clk,
+    input  wire        rst,
+    input  wire [7:0]  tx_data,
+    input  wire        tx_start,
+    output wire        tx,
+    output wire        tx_busy,
+    input  wire        rx,
+    output wire [7:0]  rx_data,
+    output wire        rx_valid,
+    output wire        rx_error,
+    output wire        baud_locked,
+    output wire [2:0]  baud_index,
+    output wire [15:0] baud_div,
+    output wire        clk_tx_active,
+    output wire        clk_rx_active,
+    output wire        clk_baud_active
+);
+
+wire clk_tx, clk_rx, clk_baud;
+
+// ?? TX activity ???????????????????????????????????????????????
+wire tx_active = tx_start | tx_busy;
+
+// ?? RX activity ? hold for full frame duration ????????????????
+reg [15:0] rx_idle_cnt;
+reg        rx_was_active;
+
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        rx_idle_cnt   <= 16'd0;
+        rx_was_active <= 1'b0;
+    end else begin
+        if (!rx) begin
+            // start bit detected ? keep active for full frame
+            // 10 bits * 434 cycles + margin = 6000 cycles
+            rx_idle_cnt   <= 16'd6000;
+            rx_was_active <= 1'b1;
+        end else if (rx_valid) begin
+            // byte received ? hold a little longer
+            rx_idle_cnt   <= 16'd2000;
+            rx_was_active <= 1'b1;
+        end else if (rx_idle_cnt > 0) begin
+            rx_idle_cnt   <= rx_idle_cnt - 1;
+            rx_was_active <= 1'b1;
+        end else begin
+            rx_was_active <= 1'b0;
+        end
+    end
+end
+
+wire rx_active_sig = rx_was_active;
+wire baud_active   = ~baud_locked;
+
+// ?? clock gate ????????????????????????????????????????????????
+clock_gate CG (
+    .clk      (clk),
+    .rst      (rst),
+    .tx_active(tx_active),
+    .rx_active(rx_active_sig),
+    .baud_en  (baud_active),
+    .clk_tx   (clk_tx),
+    .clk_rx   (clk_rx),
+    .clk_baud (clk_baud)
+);
+
+// ?? baud detector ?????????????????????????????????????????????
+baud_detect #(
+    .CLK_FREQ(CLK_FREQ)
+) BD (
+    .clk        (clk_baud),
+    .rst        (rst),
+    .rx         (rx),
+    .baud_div   (baud_div),
+    .baud_locked(baud_locked),
+    .baud_index (baud_index)
+);
+
+// ?? UART TX ???????????????????????????????????????????????????
+uart_tx #(
+    .CLK_FREQ (CLK_FREQ),
+    .BAUD_RATE(115200)
+) TX (
+    .clk     (clk_tx),
+    .rst     (rst),
+    .tx_data (tx_data),
+    .tx_start(tx_start & baud_locked),
+    .tx      (tx),
+    .tx_busy (tx_busy)
+);
+
+// ?? UART RX ???????????????????????????????????????????????????
+uart_rx #(
+    .CLK_FREQ (CLK_FREQ),
+    .BAUD_RATE(115200)
+) RX (
+    .clk     (clk_rx),
+    .rst     (rst),
+    .rx      (rx),
+    .rx_data (rx_data),
+    .rx_valid(rx_valid),
+    .rx_error(rx_error)
+);
+
+// ?? status ????????????????????????????????????????????????????
+assign clk_tx_active   = tx_active;
+assign clk_rx_active   = rx_active_sig;
+assign clk_baud_active = baud_active;
+
+endmodule
