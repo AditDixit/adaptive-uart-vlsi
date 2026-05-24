@@ -138,8 +138,8 @@ compare to known divisors ±3%
 
 ## Publication
 
-Work being prepared for submission to **IEEE NEWCAS 2027**
-(New Circuits and Systems Conference)
+
+Designed with research-oriented low-power techniques inspired by IoT edge applications.
 
 ---
 
