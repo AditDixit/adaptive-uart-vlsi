@@ -187,27 +187,6 @@ Note for testing: a single low pulse is enough to trigger detection, but the run
 
 ---
 
-## Running the Simulations
-
-```bash
-SRC="uart_tx.v uart_rx.v baud_detect.v clock_gate.v adaptive_uart_top.v"
-
-verilator --binary --timing --top-module adaptive_uart_top_tb \
-    adaptive_uart_top_tb.v $SRC
-./obj_dir/Vadaptive_uart_top_tb
-```
-
-The other testbenches are built the same way with their own top module (`uart_tx_tb`, `baud_detect_tb`, `clock_gate_tb`, `uart_loopback_tb`). The activity sweep takes `-GGAP_NS=<ns> -GDIR=<0 for RX, 1 for TX>` and prints one `SWEEP ...` line. If the C++ build fails with coroutine errors, add `-CFLAGS "-std=c++20 -fcoroutines"`. The testbenches also run in ModelSim-Intel.
-
----
-
-## Tools Used
-
-- **Verilog HDL** - RTL design
-- **ModelSim-Intel** - functional simulation during development
-- **Verilator 5** - reproduction of the results in this README
-- **Quartus Prime 23.1 Lite** - synthesis, STA, power analysis
-- **Target device** - Intel MAX 10 (10M08DAF484C8G)
 
 ---
 
