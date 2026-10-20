@@ -1,7 +1,7 @@
 // ============================================================
 // Project  : Power-Aware Adaptive UART Transceiver
 // Module   : baud_detect
-// Author   : [Your Name] | VIT Vellore | ECE 7th Sem
+// Author   : Aditya Dixit | VIT Vellore | ECE 7th Sem
 // Date     : May 2026
 // ============================================================
 
