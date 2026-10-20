@@ -73,6 +73,27 @@ Quartus Prime 23.1 Lite:
 
 > **Reading the power numbers:** this estimate was taken with an idle design, so the 0.00 mW core dynamic figure only says nothing was switching. It is not a measurement of what clock gating saves, and static power (39.76 mW) cannot be reduced by clock gating. The switching-activity results below are the evidence for the gating benefit.
 
+### Independent cross-check (Yosys, generic synthesis)
+
+Run with Yosys 0.70 (`synth; abc -lut 4`, flattened). This is a technology-independent estimate, not a Quartus result, so LUT counts differ from the Logic Element figure above.
+
+| Metric | Yosys estimate | Quartus |
+|---|---|---|
+| Flip-flops | 162 | 162 |
+| Latches (clock gates) | 3 | n/a |
+| 4-input LUTs | 411 | 294 LEs (after Quartus packing and optimisation) |
+| Longest logic path | 11 LUT levels | Fmax 169.84 MHz |
+
+| Module | Flip-flops | 4-input LUTs |
+|---|---|---|
+| `adaptive_uart_top` (own logic) | 17 | 32 |
+| `baud_detect` | 37 | 186 |
+| `uart_tx` | 49 | 94 |
+| `uart_rx` | 59 | 93 |
+| `clock_gate` (3 instances) | 3 latches | 6 |
+
+The flip-flop count matches Quartus exactly. The baud detector is the largest consumer of logic because of its multi-range classification and divisor compare.
+
 ---
 
 ## Verification Results
@@ -112,14 +133,37 @@ The baud clock runs from reset until the baud rate is locked, then stays off. Th
 
 ### Measured clock-enable activity (simulation)
 
-Share of clock cycles in which each gated clock is enabled. A design without clock gating would be 100% for all three.
+Share of clock cycles in which each gated clock is enabled, swept over the idle gap between bytes (10 bytes per run at 115200 bps, 50 MHz clock, baud already locked; `uart_activity_sweep_tb.v`). A design without clock gating would be 100% for all three clocks. `clk_baud` stays at 0% in every run because the detector is gated off once the rate is locked.
 
-| Workload | clk_tx | clk_rx | clk_baud |
-|---|---|---|---|
-| Back-to-back RX traffic (500 bytes, worst case for RX) | 0.00% | 100.00% | 0.00% |
-| Sparse RX traffic (20 bytes, ~1 ms apart) | 0.00% | **11.19%** | 0.00% |
+| Direction | Gap between bytes | Window (cycles) | clk_tx | clk_rx |
+|---|---|---|---|---|
+| RX | back-to-back | 47,741 | 0.00% | 100.00% |
+| RX | 0.1 ms | 97,740 | 0.00% | 62.70% |
+| RX | 1 ms | 547,740 | 0.00% | 11.19% |
+| RX | 10 ms | 5,047,740 | 0.00% | 1.21% |
+| TX | back-to-back | 47,760 | 90.89% | 0.00% |
+| TX | 0.1 ms | 97,751 | 44.41% | 0.00% |
+| TX | 1 ms | 547,751 | 7.93% | 0.00% |
+| TX | 10 ms | 5,047,751 | 0.86% | 0.00% |
 
-These counts come from the clock-enable signals in simulation. They show the reduction in clock activity, not a power figure from Quartus. Gating with fabric logic on an FPGA is not the same as using a dedicated clock-control block, so the technique pays off most in an ASIC flow, where the latch and AND map to a standard-cell clock gate.
+The RX figure at "back-to-back" is 100% because the hold timer (about 40 µs) is longer than the gap, so the receiver never gates between frames.
+
+### Flop-weighted clock-pin activity
+
+The percentages above count enable cycles per domain. Weighting each domain by the number of flip-flops it clocks (Yosys flop counts: 17 always-on in the top level, 37 baud detector, 49 TX, 59 RX; 162 total) gives the share of flop clock pins toggling relative to an ungated design:
+
+| Workload | Clock activity vs ungated | Reduction |
+|---|---|---|
+| RX, back-to-back | 46.9% | 53.1% |
+| RX, 0.1 ms gap | 33.3% | 66.7% |
+| RX, 1 ms gap | 14.6% | 85.4% |
+| RX, 10 ms gap | 10.9% | 89.1% |
+| TX, back-to-back | 38.0% | 62.0% |
+| TX, 0.1 ms gap | 23.9% | 76.1% |
+| TX, 1 ms gap | 12.9% | 87.1% |
+| TX, 10 ms gap | 10.8% | 89.2% |
+
+The floor is 10.5% (the 17 always-on flops). This is a proxy computed from simulation and flop counts, not a power measurement: it ignores clock-tree capacitance, the latch cells themselves and data-path switching. These counts show the reduction in clock activity, not a power figure from Quartus. Gating with fabric logic on an FPGA is not the same as using a dedicated clock-control block, so the technique pays off most in an ASIC flow, where the latch and AND map to a standard-cell clock gate.
 
 ---
 
@@ -153,7 +197,7 @@ verilator --binary --timing --top-module adaptive_uart_top_tb \
 ./obj_dir/Vadaptive_uart_top_tb
 ```
 
-The other testbenches are built the same way with their own top module (`uart_tx_tb`, `baud_detect_tb`, `clock_gate_tb`, `uart_loopback_tb`). If the C++ build fails with coroutine errors, add `-CFLAGS "-std=c++20 -fcoroutines"`. The testbenches also run in ModelSim-Intel.
+The other testbenches are built the same way with their own top module (`uart_tx_tb`, `baud_detect_tb`, `clock_gate_tb`, `uart_loopback_tb`). The activity sweep takes `-GGAP_NS=<ns> -GDIR=<0 for RX, 1 for TX>` and prints one `SWEEP ...` line. If the C++ build fails with coroutine errors, add `-CFLAGS "-std=c++20 -fcoroutines"`. The testbenches also run in ModelSim-Intel.
 
 ---
 
