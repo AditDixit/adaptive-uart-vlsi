@@ -1,7 +1,7 @@
 // ============================================================
 // Project  : Power-Aware Adaptive UART Transceiver
 // Module   : uart_rx
-// Author   : [Your Name] | VIT Vellore | ECE 7th Sem
+// Author   : Aditya Dixit | VIT Vellore | ECE 7th Sem
 // Date     : May 2026
 // ============================================================
 
