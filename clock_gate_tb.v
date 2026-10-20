@@ -31,11 +31,20 @@ always @(posedge clk_tx)   tx_toggles   = tx_toggles   + 1;
 always @(posedge clk_rx)   rx_toggles   = rx_toggles   + 1;
 always @(posedge clk_baud) baud_toggles = baud_toggles + 1;
 
+integer fails = 0;
+
 task check_gates;
     input exp_tx, exp_rx, exp_baud;
-    input [255:0] test_name;
+    input [8*64:1] test_name;
     integer t0_tx, t0_rx, t0_baud;
     begin
+        // The enables are changed on a rising clock edge. Wait for the next
+        // falling edge before snapshotting, so the last edge of the previous
+        // mode (counted in the same time step) is not attributed to this one.
+        // The latch is transparent while clk is low, so the new enables take
+        // effect from the next rising edge.
+        @(negedge clk);
+
         // snapshot toggle counts
         t0_tx   = tx_toggles;
         t0_rx   = rx_toggles;
@@ -53,7 +62,7 @@ task check_gates;
         else if (!exp_tx && (tx_toggles == t0_tx))
             $display("PASS: clk_tx   GATED    (0 toggles — power saved)");
         else
-            $display("FAIL: clk_tx   unexpected behaviour");
+            begin $display("FAIL: clk_tx   unexpected behaviour"); fails = fails + 1; end
 
         if (exp_rx && (rx_toggles > t0_rx))
             $display("PASS: clk_rx   RUNNING  (toggled %0d times)",
@@ -61,7 +70,7 @@ task check_gates;
         else if (!exp_rx && (rx_toggles == t0_rx))
             $display("PASS: clk_rx   GATED    (0 toggles — power saved)");
         else
-            $display("FAIL: clk_rx   unexpected behaviour");
+            begin $display("FAIL: clk_rx   unexpected behaviour"); fails = fails + 1; end
 
         if (exp_baud && (baud_toggles > t0_baud))
             $display("PASS: clk_baud RUNNING  (toggled %0d times)",
@@ -69,7 +78,7 @@ task check_gates;
         else if (!exp_baud && (baud_toggles == t0_baud))
             $display("PASS: clk_baud GATED    (0 toggles — power saved)");
         else
-            $display("FAIL: clk_baud unexpected behaviour");
+            begin $display("FAIL: clk_baud unexpected behaviour"); fails = fails + 1; end
     end
 endtask
 
@@ -111,7 +120,8 @@ initial begin
     check_gates(1, 1, 0, "TX+RX: baud clock gated (already locked)");
 
     $display("\n============================================");
-    $display("  Clock Gate Tests Complete");
+    if (fails == 0) $display("  ALL CLOCK GATE TESTS PASSED (18 checks)");
+    else            $display("  %0d CLOCK GATE CHECK(S) FAILED", fails);
     $display("============================================");
     $finish;
 end
