@@ -1,7 +1,7 @@
 # Power-Aware Adaptive UART Transceiver
 **RTL Design | Functional Verification | Synthesis | Intel MAX 10**
 
-> Designed as part of VLSI coursework at VIT Vellore | ECE 7th Semester
+
 
 ---
 
